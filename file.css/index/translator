@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Food Label Translator</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 14px;
+      --green: #16a34a;
+      --red: #dc2626;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ───────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #0f2460 0%, #2563eb 100%);
+      color: #fff;
+      padding: 1.5rem 1rem 1.4rem;
+      text-align: center;
+    }
+    header h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.4px; }
+    header p  { opacity: .75; font-size: .88rem; margin-top: .25rem; }
+
+    /* ── LAYOUT ───────────────────────────────────────────── */
+    .container { max-width: 680px; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
+
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 1.4rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1.1rem;
+    }
+    .step-badge {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: .82rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-header h2 { font-size: 1rem; font-weight: 700; }
+
+    /* ── CAMERA ───────────────────────────────────────────── */
+    .camera-frame {
+      background: #0f172a;
+      border-radius: 10px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      max-height: 320px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+    .camera-frame video { width: 100%; height: 100%; object-fit: cover; }
+    #sel-canvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: none;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .cam-placeholder {
+      color: #475569;
+      text-align: center;
+      padding: 2rem;
+    }
+    .cam-placeholder svg { width: 48px; height: 48px; opacity: .35; display: block; margin: 0 auto .6rem; }
+
+    .sel-hint {
+      font-size: .75rem;
+      color: var(--primary);
+      margin-top: .4rem;
+      display: none;
+    }
+    .sel-hint.active { display: block; }
+    .sel-active-label {
+      position: absolute;
+      bottom: 8px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(37,99,235,.85);
+      color: #fff;
+      font-size: .72rem;
+      font-weight: 700;
+      padding: .25rem .65rem;
+      border-radius: 999px;
+      pointer-events: none;
+      white-space: nowrap;
+      display: none;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: .6rem;
+      margin-top: .75rem;
+      flex-wrap: wrap;
+    }
+
+    /* ── BUTTONS ──────────────────────────────────────────── */
+    .btn {
+      padding: .55rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      transition: filter .12s, transform .1s;
+      line-height: 1;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(.91); }
+    .btn:active:not(:disabled) { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+    .btn-primary  { background: var(--primary); color: #fff; flex: 1; justify-content: center; }
+    .btn-outline  { background: #fff; color: var(--text); border: 1.5px solid var(--border); }
+    .btn-green    { background: var(--green); color: #fff; flex: 1; justify-content: center; }
+    .btn-ghost    { background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
+
+    .upload-label {
+      padding: .55rem 1.1rem;
+      border-radius: 8px;
+      background: #f1f5f9;
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      color: var(--text);
+      transition: background .12s;
+      white-space: nowrap;
+    }
+    .upload-label:hover { background: #e2e8f0; }
+    #file-input { display: none; }
+
+    /* ── OCR PROGRESS ─────────────────────────────────────── */
+    .progress-wrap { margin-bottom: .9rem; }
+    .progress-label { font-size: .8rem; color: var(--muted); margin-bottom: .35rem; }
+    .progress-track { background: #e2e8f0; border-radius: 999px; height: 7px; overflow: hidden; }
+    .progress-fill  {
+      height: 100%; border-radius: 999px;
+      background: var(--primary);
+      width: 0%;
+      transition: width .25s;
+    }
+
+    /* ── TEXTAREA ─────────────────────────────────────────── */
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem;
+      font-size: .86rem;
+      color: var(--text);
+      resize: vertical;
+      font-family: inherit;
+      line-height: 1.55;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(37,99,235,.12);
+    }
+    .hint { font-size: .75rem; color: var(--muted); margin-top: .35rem; }
+
+    /* ── LANGUAGE GRID ────────────────────────────────────── */
+    .lang-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+      gap: .5rem;
+    }
+    .lang-btn {
+      padding: .5rem .7rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: .83rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      transition: all .12s;
+      font-family: inherit;
+    }
+    .lang-btn.sel {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .lang-btn:hover:not(.sel) { border-color: #94a3b8; }
+
+    /* ── CARD OUTPUT ──────────────────────────────────────── */
+    .section-label {
+      font-size: .7rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: .55rem;
+    }
+
+    .allergen-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+      gap: .5rem;
+      margin-bottom: 1.25rem;
+    }
+    .badge {
+      padding: .5rem .7rem;
+      border-radius: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      border: 2px solid transparent;
+    }
+    .badge.contains {
+      background: #fef2f2;
+      border-color: #fca5a5;
+      color: #991b1b;
+    }
+    .badge.free {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #166534;
+      opacity: .65;
+    }
+    .badge.free .badge-name { text-decoration: line-through; }
+
+    .ingredients-box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-size: .85rem;
+      line-height: 1.65;
+      white-space: pre-wrap;
+    }
+
+    /* ── SPINNER / LOADING ────────────────────────────────── */
+    .loading-state {
+      text-align: center;
+      padding: 2.5rem;
+      color: var(--muted);
+    }
+    .spinner {
+      display: inline-block;
+      width: 26px; height: 26px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin .75s linear infinite;
+      margin-bottom: .6rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── ALERTS ───────────────────────────────────────────── */
+    .alert {
+      padding: .7rem 1rem;
+      border-radius: 8px;
+      font-size: .85rem;
+      margin-bottom: .9rem;
+    }
+    .alert-err  { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+    .alert-info { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+    .summary-bar {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      background: #fff7ed;
+      border: 1.5px solid #fed7aa;
+      border-radius: 8px;
+      padding: .65rem 1rem;
+      margin-bottom: 1rem;
+      font-size: .88rem;
+      color: #9a3412;
+      font-weight: 600;
+    }
+    .summary-bar.safe {
+      background: #f0fdf4;
+      border-color: #bbf7d0;
+      color: #166534;
+    }
+
+    .hidden { display: none !important; }
+
+    /* ── PRINT ────────────────────────────────────────────── */
+    @media print {
+      header .sub, .card:not(#output-card) { display: none !important; }
+      #output-card { box-shadow: none; border: none; }
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────────────── */
+    @media (max-width: 460px) {
+      .allergen-grid { grid-template-columns: repeat(2, 1fr); }
+      .lang-grid     { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🍽️ Food Label Translator</h1>
+  <p class="sub">Scan any food label — get allergy info in your language</p>
+</header>
+
+<div class="container">
+
+  <!-- ── STEP 1: CAPTURE ──────────────────────────────────── -->
+  <div class="card" id="step1">
+    <div class="card-header">
+      <div class="step-badge">1</div>
+      <h2>Capture the Food Label</h2>
+    </div>
+
+    <div class="camera-frame" id="cam-frame">
+      <div class="cam-placeholder" id="cam-placeholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+          <circle cx="12" cy="13" r="4"/>
+        </svg>
+        <p>Camera preview appears here</p>
+      </div>
+      <video id="video" autoplay playsinline style="display:none"></video>
+      <canvas id="sel-canvas"></canvas>
+      <div class="sel-active-label" id="sel-label">✂️ Region selected — drag to change</div>
+    </div>
+
+    <p class="sel-hint" id="sel-hint">✥ Drag on the image to select the ingredients area for OCR</p>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btn-cam" onclick="startCamera()">
+        📷 Start Camera
+      </button>
+      <button class="btn btn-outline hidden" id="btn-capture" onclick="capturePhoto()">
+        📸 Capture
+      </button>
+      <button class="btn btn-ghost hidden" id="btn-retake" onclick="retakePhoto()">
+        🔄 Retake
+      </button>
+      <button class="btn btn-ghost hidden" id="btn-clearsel" onclick="clearSelection()">
+        ✕ Clear Region
+      </button>
+      <label class="upload-label">
+        ⬆️ Upload Image
+        <input type="file" id="file-input" accept="image/*" onchange="handleUpload(event)">
+      </label>
+    </div>
+    <div id="cam-err"></div>
+  </div>
+
+  <!-- ── STEP 2: OCR ──────────────────────────────────────── -->
+  <div class="card" id="step2">
+    <div class="card-header">
+      <div class="step-badge">2</div>
+      <h2>Extract Text (OCR)</h2>
+    </div>
+
+    <div id="ocr-progress" class="hidden progress-wrap">
+      <p class="progress-label" id="ocr-status">Initializing…</p>
+      <div class="progress-track"><div class="progress-fill" id="ocr-bar"></div></div>
+    </div>
+
+    <div id="ocr-err"></div>
+
+    <textarea id="ocr-text" placeholder="Scanned ingredients will appear here. You can edit the text to fix any OCR errors before generating the allergy card."></textarea>
+    <p class="hint">✏️ Review and correct any OCR errors before proceeding.</p>
+
+    <div class="btn-row" style="margin-top:.9rem">
+      <button class="btn btn-primary" id="btn-ocr" onclick="runOCR()">
+        🔍 Scan Label with OCR
+      </button>
+      <button class="btn btn-ghost" onclick="useSample()" title="Load sample ingredient text for testing">
+        🧪 Use Sample
+      </button>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: LANGUAGES ────────────────────────────────── -->
+  <div class="card" id="step3">
+    <div class="card-header">
+      <div class="step-badge">3</div>
+      <h2>Select Language</h2>
+    </div>
+
+    <div class="lang-grid" id="lang-grid"></div>
+  </div>
+
+  <!-- ── STEP 4: RESULTS ───────────────────────────────────── -->
+  <div class="card hidden" id="output-card">
+    <div class="card-header">
+      <div class="step-badge">4</div>
+      <h2>Allergy Report</h2>
+    </div>
+
+    <div id="card-loading" class="loading-state hidden">
+      <div class="spinner"></div>
+      <p>Translating…</p>
+    </div>
+
+    <div id="card-content"></div>
+  </div>
+
+</div><!-- /container -->
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  DATA
+// ─────────────────────────────────────────────────────────────
+const ALLERGENS = [
+  { id:'gluten',      label:'Gluten',          icon:'🌾',
+    kw:['wheat','rye','barley','oats','oat','spelt','kamut','gluten','semolina','bulgur','farro','triticale','flour','bread crumb','breadcrumb'] },
+  { id:'milk',        label:'Milk / Dairy',     icon:'🥛',
+    kw:['milk','dairy','lactose','butter','cream','cheese','whey','casein','lactalbumin','lactoglobulin','ghee','yogurt','yoghurt','skimmed','buttermilk'] },
+  { id:'eggs',        label:'Eggs',             icon:'🥚',
+    kw:['egg ','eggs','albumin','ovalbumin','globulin','lysozyme','mayonnaise','meringue'] },
+  { id:'peanuts',     label:'Peanuts',          icon:'🥜',
+    kw:['peanut','groundnut','monkey nut','arachis'] },
+  { id:'nuts',        label:'Tree Nuts',        icon:'🌰',
+    kw:['almond','hazelnut','walnut','cashew','pecan','brazil nut','pistachio','macadamia','queensland nut','marzipan','praline'] },
+  { id:'soy',         label:'Soy / Soya',       icon:'🫘',
+    kw:['soy ','soya','tofu','tempeh','miso','edamame','soybean','soy sauce','tamari'] },
+  { id:'fish',        label:'Fish',             icon:'🐟',
+    kw:['fish','cod','salmon','tuna','mackerel','anchov','sardine','herring','tilapia','bass','flounder','pike','pollock','perch','worcestershire'] },
+  { id:'crustaceans', label:'Crustaceans',      icon:'🦐',
+    kw:['crab','lobster','shrimp','prawn','crayfish','crawfish','barnacle','krill'] },
+  { id:'molluscs',    label:'Molluscs',         icon:'🦑',
+    kw:['squid','octopus','clam','mussel','oyster','scallop','snail','abalone','cockle','whelk'] },
+  { id:'celery',      label:'Celery',           icon:'🥬',
+    kw:['celery','celeriac'] },
+  { id:'mustard',     label:'Mustard',          icon:'🌿',
+    kw:['mustard'] },
+  { id:'sesame',      label:'Sesame',           icon:'🌱',
+    kw:['sesame','tahini','til ','gingelly'] },
+  { id:'lupin',       label:'Lupin',            icon:'🌸',
+    kw:['lupin','lupine'] },
+  { id:'sulphites',   label:'Sulphites',        icon:'⚗️',
+    kw:['sulphite','sulfite','sulphur dioxide','sulfur dioxide','e220','e221','e222','e223','e224','e225','e226','e227','e228'] },
+];
+/*   const SPANISHALLERGENS =[
+  {id:'gluten',    label:'Gluten',    icon:'🌾',
+   kw:['trigo',]
+   },
+  {id:'milk',    label:'Leche',  icon: '🥛',
+   kw:[]
+  },
+ { id:'eggs',        label:'Huevos',             icon:'🥚',
+    kw:['','','','','','','',''] },
+  { id:'peanuts',     label:'Cacahuate/ ',          icon:'🥜',
+    kw:['','','',''] },
+  { id:'nuts',        label:'Nueces de arboles',        icon:'🌰',
+    kw:['fruto seco','','','','','','','','','',''] },
+  { id:'soy',         label:'Soja/ Soya',       icon:'🫘',
+    kw:['','','','','','','','',''] },
+  { id:'fish',        label:'Pescado',             icon:'🐟',
+    kw:['','','','','','','','','','','','','','',''] },
+  { id:'crustaceans', label:'Crustaceo',      icon:'🦐',
+    kw:['','','','','','','',''] },
+  { id:'molluscs',    label:'Molusco',         icon:'🦑',
+    kw:['pulpo','','','','','','','','',''] },
+  { id:'celery',      label:'Apio',           icon:'🥬',
+    kw:['',''] },
+  { id:'mustard',     label:'',          icon:'🌿',
+    kw:[''] },
+  { id:'sesame',      label:'Sesamo/ Ajonjoli',           icon:'🌱',
+    kw:['sesamo','ajonjoli',' ',''] },
+  { id:'lupin',       label:'Almatruz',            icon:'🌸',
+    kw:['',''] },
+  { id:'sulphites',   label:'',        icon:'⚗️',
+    kw:[] }, 
+]*/
+//add an accent mark to translations where needed
+const LANGUAGES = [
+  { code:'es',    name:'Spanish',     flag:'🇪🇸' },
+ /* { code:'fr',    name:'French',      flag:'🇫🇷' },
+  { code:'de',    name:'German',      flag:'🇩🇪' },
+  { code:'it',    name:'Italian',     flag:'🇮🇹' },
+  { code:'pt',    name:'Portuguese',  flag:'🇵🇹' },
+  { code:'nl',    name:'Dutch',       flag:'🇳🇱' },
+  { code:'pl',    name:'Polish',      flag:'🇵🇱' },
+  { code:'ru',    name:'Russian',     flag:'🇷🇺' },
+  { code:'ar',    name:'Arabic',      flag:'🇸🇦' },
+  { code:'zh-CN', name:'Chinese',     flag:'🇨🇳' },
+  { code:'ja',    name:'Japanese',    flag:'🇯🇵' },
+  { code:'ko',    name:'Korean',      flag:'🇰🇷' },
+  { code:'hi',    name:'Hindi',       flag:'🇮🇳' },
+  { code:'tr',    name:'Turkish',     flag:'🇹🇷' },
+  { code:'sv',    name:'Swedish',     flag:'🇸🇪' },
+  */ 
+];
+
+const RTL = new Set(['ar','he','fa','ur']);
+
+const SAMPLE_TEXT = `INGREDIENTS: Wheat Flour, Sugar, Palm Oil, Cocoa Powder (3%), Skimmed Milk Powder, Whey Powder (from Milk), Hazelnuts (2%), Eggs, Raising Agents (Sodium Bicarbonate, Ammonium Bicarbonate), Salt, Soya Lecithin, Natural Vanilla Flavouring. Contains: Wheat, Milk, Eggs, Hazelnuts, Soya.`;
+
+// ─────────────────────────────────────────────────────────────
+//  STATE
+// ─────────────────────────────────────────────────────────────
+let mediaStream = null;
+let capturedSrc = null;
+
+// Selection state
+let imgEl    = null;          // loaded Image object for the preview
+let lbX = 0, lbY = 0;        // letterbox top-left within canvas (canvas px)
+let lbW = 0, lbH = 0;        // letterbox rendered size (canvas px)
+let selBox   = null;          // { x1,y1,x2,y2 } in canvas px; null = full image
+let dragging = false;
+let dragStart = { x: 0, y: 0 };
+
+// ─────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', buildLangGrid);
+
+function buildLangGrid() {
+  const grid = document.getElementById('lang-grid');
+  LANGUAGES.forEach(lang => {
+    const btn = document.createElement('button');
+    btn.className = 'lang-btn';
+    btn.dataset.code = lang.code;
+    btn.innerHTML = `<span>${lang.flag}</span><span>${lang.name}</span>`;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('sel'));
+      btn.classList.add('sel');
+      showAllergies(lang.code);
+    });
+    grid.appendChild(btn);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CAMERA
+// ─────────────────────────────────────────────────────────────
+async function startCamera() {
+  clearAlert('cam-err');
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal:'environment' }, width: { ideal:1280 }, height: { ideal:960 } }
+    });
+    const video = document.getElementById('video');
+    video.srcObject = mediaStream;
+    video.style.display = 'block';
+    document.getElementById('cam-placeholder').style.display = 'none';
+    setVisible('btn-cam', false);
+    setVisible('btn-capture', true);
+  } catch (e) {
+    showAlert('cam-err', 'err', 'Camera access denied or unavailable. Please use "Upload Image" instead.');
+  }
+}
+
+function capturePhoto() {
+  const video = document.getElementById('video');
+  // Render video frame to an offscreen canvas to get the data URL
+  const tmp = document.createElement('canvas');
+  tmp.width  = video.videoWidth;
+  tmp.height = video.videoHeight;
+  tmp.getContext('2d').drawImage(video, 0, 0);
+  capturedSrc = tmp.toDataURL('image/jpeg', 0.92);
+  stopStream();
+  showPreview(capturedSrc);
+}
+
+function retakePhoto() {
+  capturedSrc = null;
+  selBox = null;
+  imgEl  = null;
+  const canvas = document.getElementById('sel-canvas');
+  canvas.style.display = 'none';
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('video').style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = '';
+  document.getElementById('sel-hint').classList.remove('active');
+  document.getElementById('sel-label').style.display = 'none';
+  setVisible('btn-retake', false);
+  setVisible('btn-clearsel', false);
+  setVisible('btn-capture', false);
+  setVisible('btn-cam', true);
+  document.getElementById('ocr-text').value = '';
+  startCamera();
+}
+
+function showPreview(src) {
+  document.getElementById('video').style.display = 'none';
+  document.getElementById('cam-placeholder').style.display = 'none';
+  setVisible('btn-capture', false);
+  setVisible('btn-retake', true);
+  initSelectionCanvas(src);
+}
+
+function stopStream() {
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SELECTION CANVAS
+// ─────────────────────────────────────────────────────────────
+function initSelectionCanvas(src) {
+  const canvas = document.getElementById('sel-canvas');
+  canvas.style.display = 'block';
+
+  // Size canvas pixels to match its CSS-rendered size
+  const rect = canvas.getBoundingClientRect();
+  const dpr  = window.devicePixelRatio || 1;
+  canvas.width  = rect.width  * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  selBox = null;
+  imgEl  = new Image();
+  imgEl.onload = () => {
+    computeLetterbox(rect.width, rect.height);
+    redrawCanvas();
+    document.getElementById('sel-hint').classList.add('active');
+    document.getElementById('sel-label').style.display = 'none';
+    attachSelectionEvents(canvas);
+  };
+  imgEl.src = src;
+}
+
+function computeLetterbox(displayW, displayH) {
+  const scale = Math.min(displayW / imgEl.naturalWidth, displayH / imgEl.naturalHeight);
+  lbW = imgEl.naturalWidth  * scale;
+  lbH = imgEl.naturalHeight * scale;
+  lbX = (displayW - lbW) / 2;
+  lbY = (displayH - lbH) / 2;
+}
+
+function redrawCanvas() {
+  const canvas = document.getElementById('sel-canvas');
+  const rect   = canvas.getBoundingClientRect();
+  const ctx    = canvas.getContext('2d');
+  ctx.clearRect(0, 0, rect.width, rect.height);
+
+  // Draw the image letterboxed
+  ctx.drawImage(imgEl, lbX, lbY, lbW, lbH);
+
+  if (!selBox) return;
+
+  const { x1, y1, x2, y2 } = normalizeBox(selBox);
+  const w = x2 - x1, h = y2 - y1;
+
+  // Dark overlay on unselected area
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.52)';
+  ctx.fillRect(lbX, lbY, lbW, lbH);
+  // Cut out selected region (re-draw image portion)
+  const ix = (x1 - lbX) / lbW * imgEl.naturalWidth;
+  const iy = (y1 - lbY) / lbH * imgEl.naturalHeight;
+  const iw = w / lbW * imgEl.naturalWidth;
+  const ih = h / lbH * imgEl.naturalHeight;
+  ctx.drawImage(imgEl, ix, iy, iw, ih, x1, y1, w, h);
+  ctx.restore();
+
+  // Dashed selection border
+  ctx.save();
+  ctx.strokeStyle = '#3b82f6';
+  ctx.lineWidth   = 2;
+  ctx.setLineDash([6, 3]);
+  ctx.strokeRect(x1, y1, w, h);
+  ctx.restore();
+
+  // Corner handles
+  const hs = 7;
+  ctx.fillStyle = '#3b82f6';
+  [[x1,y1],[x2,y1],[x1,y2],[x2,y2]].forEach(([cx,cy]) => {
+    ctx.fillRect(cx - hs/2, cy - hs/2, hs, hs);
+  });
+}
+
+function normalizeBox(b) {
+  return {
+    x1: Math.min(b.x1, b.x2),
+    y1: Math.min(b.y1, b.y2),
+    x2: Math.max(b.x1, b.x2),
+    y2: Math.max(b.y1, b.y2),
+  };
+}
+
+function canvasPoint(canvas, clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: clientX - rect.left,
+    y: clientY - rect.top,
+  };
+}
+
+function clampToLetterbox(x, y) {
+  return {
+    x: Math.max(lbX, Math.min(lbX + lbW, x)),
+    y: Math.max(lbY, Math.min(lbY + lbH, y)),
+  };
+}
+
+function attachSelectionEvents(canvas) {
+  // Remove any prior listeners by cloning
+  const fresh = canvas.cloneNode(true);
+  canvas.parentNode.replaceChild(fresh, canvas);
+
+  // Mouse
+  fresh.addEventListener('mousedown', e => {
+    if (!imgEl) return;
+    dragging = true;
+    const p = clampToLetterbox(...Object.values(canvasPoint(fresh, e.clientX, e.clientY)));
+    dragStart = p;
+    selBox = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+    document.getElementById('sel-label').style.display = 'none';
+  });
+  fresh.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const p = clampToLetterbox(...Object.values(canvasPoint(fresh, e.clientX, e.clientY)));
+    selBox.x2 = p.x; selBox.y2 = p.y;
+    redrawCanvas();
+  });
+  fresh.addEventListener('mouseup', () => finishDrag());
+  fresh.addEventListener('mouseleave', () => { if (dragging) finishDrag(); });
+
+  // Touch
+  fresh.addEventListener('touchstart', e => {
+    e.preventDefault();
+    if (!imgEl) return;
+    dragging = true;
+    const t = e.touches[0];
+    const p = clampToLetterbox(...Object.values(canvasPoint(fresh, t.clientX, t.clientY)));
+    dragStart = p;
+    selBox = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+    document.getElementById('sel-label').style.display = 'none';
+  }, { passive: false });
+  fresh.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!dragging) return;
+    const t = e.touches[0];
+    const p = clampToLetterbox(...Object.values(canvasPoint(fresh, t.clientX, t.clientY)));
+    selBox.x2 = p.x; selBox.y2 = p.y;
+    redrawCanvas();
+  }, { passive: false });
+  fresh.addEventListener('touchend', () => finishDrag());
+}
+
+function finishDrag() {
+  dragging = false;
+  if (!selBox) return;
+  const nb = normalizeBox(selBox);
+  // Discard tiny accidental drags (< 10px in either dimension)
+  if ((nb.x2 - nb.x1) < 10 || (nb.y2 - nb.y1) < 10) {
+    selBox = null;
+    redrawCanvas();
+    document.getElementById('sel-label').style.display = 'none';
+    setVisible('btn-clearsel', false);
+  } else {
+    document.getElementById('sel-label').style.display = 'block';
+    setVisible('btn-clearsel', true);
+  }
+}
+
+function clearSelection() {
+  selBox = null;
+  redrawCanvas();
+  document.getElementById('sel-label').style.display = 'none';
+  setVisible('btn-clearsel', false);
+}
+
+// Returns a data-URL of the selected region (or full image if no selection)
+function getCroppedSrc() {
+  if (!selBox || !imgEl) return capturedSrc;
+  const nb = normalizeBox(selBox);
+  // Convert canvas display coords → image coords
+  const ix = Math.round((nb.x1 - lbX) / lbW * imgEl.naturalWidth);
+  const iy = Math.round((nb.y1 - lbY) / lbH * imgEl.naturalHeight);
+  const iw = Math.round((nb.x2 - nb.x1) / lbW * imgEl.naturalWidth);
+  const ih = Math.round((nb.y2 - nb.y1) / lbH * imgEl.naturalHeight);
+  const tmp = document.createElement('canvas');
+  tmp.width  = iw;
+  tmp.height = ih;
+  tmp.getContext('2d').drawImage(imgEl, ix, iy, iw, ih, 0, 0, iw, ih);
+  return tmp.toDataURL('image/jpeg', 0.95);
+}
+
+function handleUpload(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    capturedSrc = e.target.result;
+    showPreview(capturedSrc);
+    document.getElementById('cam-placeholder').style.display = 'none';
+    setVisible('btn-cam', false);
+    stopStream();
+  };
+  reader.readAsDataURL(file);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  OCR
+// ─────────────────────────────────────────────────────────────
+async function runOCR() {
+  if (!capturedSrc) {
+    showAlert('ocr-err', 'err', 'Please capture or upload a food label image first (Step 1).');
+    return;
+  }
+  clearAlert('ocr-err');
+  const progressWrap = document.getElementById('ocr-progress');
+  const bar          = document.getElementById('ocr-bar');
+  const statusTxt    = document.getElementById('ocr-status');
+  const btn          = document.getElementById('btn-ocr');
+
+  progressWrap.classList.remove('hidden');
+  btn.disabled = true;
+  document.getElementById('ocr-text').value = '';
+
+  const ocrSrc = getCroppedSrc();
+  const regionNote = selBox ? ' (selected region)' : ' (full image)';
+  statusTxt.textContent = 'Starting OCR' + regionNote + '…';
+
+  try {
+    const { data: { text } } = await Tesseract.recognize(ocrSrc, 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          const pct = Math.round(m.progress * 100);
+          bar.style.width  = pct + '%';
+          statusTxt.textContent = `Recognizing text… ${pct}%`;
+        } else {
+          statusTxt.textContent = m.status;
+        }
+      }
+    });
+    progressWrap.classList.add('hidden');
+    document.getElementById('ocr-text').value = extractIngredients(text);
+  } catch (e) {
+    progressWrap.classList.add('hidden');
+    showAlert('ocr-err', 'err', 'OCR failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function extractIngredients(raw) {
+  const lower = raw.toLowerCase();
+  const starts = ['ingredients:','ingredients :','contains:','ingr:','ingredient:'];
+  for (const s of starts) {
+    const idx = lower.indexOf(s);
+    if (idx === -1) continue;
+    let txt = raw.slice(idx + s.length).trim();
+    const ends = ['nutrition','allerg','warning','storage','best before','keep refriger','net weight','distributed by','manufactured'];
+    let end = txt.length;
+    for (const e of ends) {
+      const ei = txt.toLowerCase().indexOf(e);
+      if (ei !== -1 && ei < end) end = ei;
+    }
+    return txt.slice(0, end).trim();
+  }
+  return raw.trim();
+}
+
+function useSample() {
+  document.getElementById('ocr-text').value = SAMPLE_TEXT;
+  clearAlert('ocr-err');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  ALLERGEN DETECTION
+// ─────────────────────────────────────────────────────────────
+function detectAllergens(text) {
+  const lower = ' ' + text.toLowerCase() + ' ';
+  return ALLERGENS.map(a => ({
+    ...a,
+    present: a.kw.some(kw => lower.includes(kw.endsWith(' ') ? kw : ' ' + kw) || lower.includes(kw + ',') || lower.includes(kw + '.') || lower.includes(kw + ')') || lower.includes(kw + '('))
+  }));
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TRANSLATION  (MyMemory — free, no key required)
+// ─────────────────────────────────────────────────────────────
+async function translate(text, targetCode) {
+  const chunks = chunkText(text, 450);
+  const parts  = [];
+  for (const chunk of chunks) {
+    const url  = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|${targetCode}`;
+    const resp = await fetch(url);
+    if (!resp.ok) { parts.push(chunk); continue; }
+    const json = await resp.json();
+    parts.push(json.responseStatus === 200 ? json.responseData.translatedText : chunk);
+  }
+  return parts.join(' ');
+}
+
+function chunkText(text, max) {
+  if (text.length <= max) return [text];
+  const chunks = [];
+  let rem = text;
+  while (rem.length > max) {
+    let cut = rem.lastIndexOf(',', max);
+    if (cut < max / 2) cut = max;
+    chunks.push(rem.slice(0, cut).trim());
+    rem = rem.slice(cut).replace(/^[,\s]+/, '');
+  }
+  if (rem.length) chunks.push(rem.trim());
+  return chunks;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SHOW ALLERGIES  (triggered by language selection)
+// ─────────────────────────────────────────────────────────────
+async function showAllergies(langCode) {
+  const rawText = document.getElementById('ocr-text').value.trim();
+  if (!rawText) {
+    alert('Please scan the label (Step 2) first, or click "Use Sample" to test.');
+    document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('sel'));
+    return;
+  }
+
+  const outputCard  = document.getElementById('output-card');
+  const cardContent = document.getElementById('card-content');
+  const loadingEl   = document.getElementById('card-loading');
+
+  outputCard.classList.remove('hidden');
+  cardContent.innerHTML = '';
+  loadingEl.classList.remove('hidden');
+  outputCard.scrollIntoView({ behavior: 'smooth' });
+
+  const allergens = detectAllergens(rawText);
+  const present   = allergens.filter(a => a.present);
+  const absent    = allergens.filter(a => !a.present);
+  const langInfo  = LANGUAGES.find(l => l.code === langCode);
+  const dir       = RTL.has(langCode) ? 'rtl' : 'ltr';
+
+  let transIngredients = rawText;
+  const transLabels = {};
+
+  try {
+    const results = await Promise.all([
+      translate(rawText, langCode),
+      ...allergens.map(a => translate(a.label, langCode))
+    ]);
+    transIngredients = results[0];
+    allergens.forEach((a, i) => { transLabels[a.id] = results[i + 1]; });
+  } catch (err) {
+    console.warn('Translation failed:', err);
+  }
+
+  loadingEl.classList.add('hidden');
+
+  const summaryHtml = present.length > 0
+    ? `<div class="summary-bar">⚠️ ${present.length} allergen${present.length > 1 ? 's' : ''} detected out of ${allergens.length} checked</div>`
+    : `<div class="summary-bar safe">✅ No major allergens detected</div>`;
+
+  const presentBadges = present.map(a =>
+    `<div class="badge contains">${a.icon} <span class="badge-name">${transLabels[a.id] || a.label}</span></div>`
+  ).join('');
+
+  const absentBadges = absent.map(a =>
+    `<div class="badge free">${a.icon} <span class="badge-name">${transLabels[a.id] || a.label}</span></div>`
+  ).join('');
+
+  cardContent.innerHTML = `
+    ${summaryHtml}
+    <div class="section-label">Allergens (${langInfo.flag} ${langInfo.name}) — ${present.length} / ${allergens.length}</div>
+    <div class="allergen-grid">${presentBadges}${absentBadges}</div>
+    <div class="section-label">Ingredients (${langInfo.flag} ${langInfo.name})</div>
+    <div class="ingredients-box" dir="${dir}">${escHtml(transIngredients)}</div>
+  `;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  UTILS
+// ─────────────────────────────────────────────────────────────
+function setVisible(id, show) {
+  document.getElementById(id).classList[show ? 'remove' : 'add']('hidden');
+}
+
+function showAlert(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'alert alert-' + type;
+  el.textContent = (type === 'err' ? '⚠️ ' : 'ℹ️ ') + msg;
+}
+
+function clearAlert(id) {
+  const el = document.getElementById(id);
+  el.className = '';
+  el.textContent = '';
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+/*use my translations first for allergens please*/
+</script>
+</body>
+</html>
