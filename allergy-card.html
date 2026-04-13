@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Allergy Card Creator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ───────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #0f2460 0%, #2563eb 100%);
+      color: #fff;
+      padding: 1.5rem 1rem 1.4rem;
+      text-align: center;
+      position: relative;
+    }
+    header h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.4px; }
+    header p  { opacity: .75; font-size: .88rem; margin-top: .25rem; }
+
+    .back-link {
+      position: absolute;
+      top: 50%;
+      left: 1rem;
+      transform: translateY(-50%);
+      color: rgba(255,255,255,.8);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: .25rem;
+      transition: color .12s;
+    }
+    .back-link:hover { color: #fff; }
+
+    /* ── LAYOUT ───────────────────────────────────────────── */
+    .container { max-width: 680px; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
+
+    .ui-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 1.4rem;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: 1rem;
+    }
+    .step-badge {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 700;
+      font-size: .82rem;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .card-header h2 { font-size: 1rem; font-weight: 700; flex: 1; }
+
+    .count-pill {
+      font-size: .72rem;
+      font-weight: 700;
+      background: #eff6ff;
+      color: var(--primary);
+      border: 1.5px solid #bfdbfe;
+      border-radius: 999px;
+      padding: .15rem .55rem;
+      white-space: nowrap;
+    }
+    .count-pill.has-items {
+      background: #fef2f2;
+      color: #991b1b;
+      border-color: #fca5a5;
+    }
+
+    /* ── ALLERGEN SELECTION ───────────────────────────────── */
+    .row-actions {
+      display: flex;
+      gap: .5rem;
+      margin-bottom: .8rem;
+    }
+
+    .allergen-select-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+      gap: .45rem;
+    }
+
+    .allergen-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .55rem .75rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: .84rem;
+      font-weight: 500;
+      transition: all .12s;
+      user-select: none;
+    }
+    .allergen-item:hover { border-color: #94a3b8; }
+    .allergen-item.checked {
+      border-color: #dc2626;
+      background: #fef2f2;
+      color: #991b1b;
+    }
+    .allergen-item .a-icon { font-size: 1.1rem; flex-shrink: 0; }
+    .allergen-item .a-check {
+      margin-left: auto;
+      width: 16px; height: 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      font-size: .65rem;
+      transition: all .12s;
+    }
+    .allergen-item.checked .a-check {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #fff;
+    }
+
+    /* ── LANGUAGE GRID ────────────────────────────────────── */
+    .hint { font-size: .75rem; color: var(--muted); margin-bottom: .75rem; }
+
+    .lang-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+      gap: .5rem;
+    }
+    .lang-btn {
+      padding: .5rem .7rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: .83rem;
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      transition: all .12s;
+      font-family: inherit;
+    }
+    .lang-btn.sel {
+      border-color: var(--primary);
+      background: #eff6ff;
+      color: var(--primary);
+      font-weight: 700;
+    }
+    .lang-btn:hover:not(.sel) { border-color: #94a3b8; }
+
+    /* ── BUTTONS ──────────────────────────────────────────── */
+    .btn {
+      padding: .55rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: .88rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      transition: filter .12s, transform .1s;
+      line-height: 1;
+    }
+    .btn:hover:not(:disabled) { filter: brightness(.91); }
+    .btn:active:not(:disabled) { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-green   { background: #16a34a; color: #fff; }
+    .btn-ghost   { background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
+    .btn-sm      { padding: .35rem .75rem; font-size: .78rem; }
+    .btn-full    { width: 100%; justify-content: center; padding: .75rem; font-size: .95rem; }
+
+    .btn-row { display: flex; gap: .6rem; flex-wrap: wrap; }
+
+    /* ── SPINNER ──────────────────────────────────────────── */
+    .loading-state { text-align: center; padding: 2.5rem; color: var(--muted); }
+    .spinner {
+      display: inline-block; width: 26px; height: 26px;
+      border: 3px solid #e2e8f0; border-top-color: var(--primary);
+      border-radius: 50%; animation: spin .75s linear infinite; margin-bottom: .6rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+
+    /* ── ALLERGY CARD ─────────────────────────────────────── */
+    .allergy-card {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid #fca5a5;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 10px rgba(0,0,0,.1);
+    }
+
+    .ac-header {
+      background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%);
+      color: #fff;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: .85rem;
+    }
+    .ac-header .flag   { font-size: 1.75rem; line-height: 1; }
+    .ac-header .ac-title-lang { font-size: .7rem; opacity: .75; text-transform: uppercase; letter-spacing: .06em; }
+    .ac-header .ac-title-trans { font-size: 1.05rem; font-weight: 800; letter-spacing: .01em; margin-top: .15rem; }
+    .ac-header .ac-title-en   { font-size: .72rem; opacity: .65; margin-top: .1rem; font-style: italic; }
+
+    .ac-body { background: #fff; padding: 1.25rem; }
+
+    .ac-phrase {
+      margin-bottom: .9rem;
+    }
+    .ac-phrase-trans {
+      font-size: .95rem;
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .ac-phrase-en {
+      font-size: .73rem;
+      color: var(--muted);
+      font-style: italic;
+      margin-top: .18rem;
+    }
+
+    .ac-allergen-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+      margin: .75rem 0 1rem;
+    }
+    .ac-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .3rem .7rem;
+      background: #fef2f2;
+      border: 1.5px solid #fca5a5;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 600;
+      color: #991b1b;
+    }
+
+    .ac-question {
+      background: #1e293b;
+      color: #fff;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+    .ac-question-trans {
+      font-size: 1rem;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+    .ac-question-en {
+      font-size: .75rem;
+      color: rgba(255,255,255,.55);
+      font-style: italic;
+      margin-top: .4rem;
+    }
+
+    .ac-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: .5rem;
+      font-size: .8rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: .75rem;
+      margin-top: .75rem;
+    }
+    .ac-footer-trans { color: var(--text); font-weight: 500; }
+
+    /* ── PRINT ────────────────────────────────────────────── */
+    /* Always hidden on screen; JS populates content but display is controlled here */
+    #print-area { display: none; }
+
+    @media print {
+      body > *:not(#print-area) { display: none !important; }
+      #print-area {
+        display: block !important;
+        padding: 1.5cm;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      .allergy-card {
+        break-inside: avoid;
+        margin-bottom: 1.5cm;
+        box-shadow: none;
+        border: 2px solid #dc2626;
+        border-radius: 10px;
+        overflow: hidden;
+      }
+      /* Force print backgrounds */
+      .ac-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .ac-question { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .ac-pill { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+
+    /* ── RESPONSIVE ───────────────────────────────────────── */
+    @media (max-width: 460px) {
+      .allergen-select-grid { grid-template-columns: repeat(2, 1fr); }
+      .lang-grid { grid-template-columns: repeat(2, 1fr); }
+      .back-link span { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <a class="back-link" href="index.html">&#8592; <span>Home</span></a>
+  <h1>🪪 Allergy Card Creator</h1>
+  <p>Personalised allergy cards for dining abroad</p>
+</header>
+
+<div class="container">
+
+  <!-- ── STEP 1: ALLERGENS ──────────────────────────────── -->
+  <div class="ui-card">
+    <div class="card-header">
+      <div class="step-badge">1</div>
+      <h2>Select Your Allergens</h2>
+      <span class="count-pill" id="allergen-count">0 selected</span>
+    </div>
+    <div class="row-actions">
+      <button class="btn btn-ghost btn-sm" onclick="selectAll()">Select all</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearAll()">Clear</button>
+    </div>
+    <div class="allergen-select-grid" id="allergen-grid"></div>
+  </div>
+
+  <!-- ── STEP 2: LANGUAGES ──────────────────────────────── -->
+  <div class="ui-card">
+    <div class="card-header">
+      <div class="step-badge">2</div>
+      <h2>Select Languages</h2>
+      <span class="count-pill" id="lang-count">0 / 3</span>
+    </div>
+    <p class="hint">Choose up to 3 languages. A card will be generated for each.</p>
+    <div class="lang-grid" id="lang-grid"></div>
+  </div>
+
+  <!-- ── GENERATE ───────────────────────────────────────── -->
+  <button class="btn btn-primary btn-full" id="btn-generate" onclick="generateCard()">
+    🪪 Generate Allergy Card
+  </button>
+
+  <!-- ── LOADING ────────────────────────────────────────── -->
+  <div id="loading" class="loading-state hidden">
+    <div class="spinner"></div>
+    <p>Translating your card…</p>
+  </div>
+
+  <!-- ── OUTPUT ─────────────────────────────────────────── -->
+  <div id="output" class="hidden">
+    <div class="btn-row" style="margin:1.25rem 0 1rem">
+      <button class="btn btn-green" onclick="window.print()">🖨️ Print Card</button>
+      <button class="btn btn-ghost" onclick="hideOutput()">&#8592; Edit</button>
+    </div>
+    <div id="card-preview"></div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Populated from JS; always hidden on screen, shown only on print -->
+<div id="print-area"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  DATA
+// ─────────────────────────────────────────────────────────────
+const ALLERGENS = [
+  { id: 'gluten',      label: 'Gluten',        icon: '🌾' },
+  { id: 'milk',        label: 'Milk / Dairy',   icon: '🥛' },
+  { id: 'eggs',        label: 'Eggs',           icon: '🥚' },
+  { id: 'peanuts',     label: 'Peanuts',        icon: '🥜' },
+  { id: 'nuts',        label: 'Tree Nuts',      icon: '🌰' },
+  { id: 'soy',         label: 'Soy / Soya',     icon: '🫘' },
+  { id: 'fish',        label: 'Fish',           icon: '🐟' },
+  { id: 'crustaceans', label: 'Crustaceans',    icon: '🦐' },
+  { id: 'molluscs',    label: 'Molluscs',       icon: '🦑' },
+  { id: 'celery',      label: 'Celery',         icon: '🥬' },
+  { id: 'mustard',     label: 'Mustard',        icon: '🌿' },
+  { id: 'sesame',      label: 'Sesame',         icon: '🌱' },
+  { id: 'lupin',       label: 'Lupin',          icon: '🌸' },
+  { id: 'sulphites',   label: 'Sulphites',      icon: '⚗️' },
+];
+
+const LANGUAGES = [
+  { code: 'es',    name: 'Spanish',     flag: '🇪🇸', rtl: false },
+  { code: 'fr',    name: 'French',      flag: '🇫🇷', rtl: false },
+  { code: 'de',    name: 'German',      flag: '🇩🇪', rtl: false },
+  { code: 'it',    name: 'Italian',     flag: '🇮🇹', rtl: false },
+  { code: 'pt',    name: 'Portuguese',  flag: '🇵🇹', rtl: false },
+  { code: 'ja',    name: 'Japanese',    flag: '🇯🇵', rtl: false },
+  { code: 'ko',    name: 'Korean',      flag: '🇰🇷', rtl: false },
+  { code: 'zh-CN', name: 'Chinese',     flag: '🇨🇳', rtl: false },
+  { code: 'ar',    name: 'Arabic',      flag: '🇸🇦', rtl: true  },
+  { code: 'th',    name: 'Thai',        flag: '🇹🇭', rtl: false },
+  { code: 'el',    name: 'Greek',       flag: '🇬🇷', rtl: false },
+  { code: 'nl',    name: 'Dutch',       flag: '🇳🇱', rtl: false },
+  { code: 'ru',    name: 'Russian',     flag: '🇷🇺', rtl: false },
+  { code: 'pl',    name: 'Polish',      flag: '🇵🇱', rtl: false },
+  { code: 'tr',    name: 'Turkish',     flag: '🇹🇷', rtl: false },
+  { code: 'sv',    name: 'Swedish',     flag: '🇸🇪', rtl: false },
+  { code: 'hi',    name: 'Hindi',       flag: '🇮🇳', rtl: false },
+  { code: 'id',    name: 'Indonesian',  flag: '🇮🇩', rtl: false },
+];
+
+// English source phrases (also shown on card as reference)
+const EN = {
+  title:        'FOOD ALLERGY ALERT',
+  statement:    'I have a serious, life-threatening food allergy.',
+  allergenIntro:'I am allergic to:',
+  question:     'Does this food contain any of these ingredients, or has it been prepared near them? Is it safe for me to eat?',
+  request:      'Please do not serve me food containing these ingredients.',
+  thanks:       'Thank you for your help.',
+};
+
+const MAX_LANGS = 3;
+
+const selectedAllergens = new Set();
+const selectedLanguages  = [];       // ordered so we can drop oldest at max
+const cache = {};                    // langCode → { phrases, allergenLabels }
+
+// ─────────────────────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  buildAllergenGrid();
+  buildLangGrid();
+});
+
+function buildAllergenGrid() {
+  const grid = document.getElementById('allergen-grid');
+  ALLERGENS.forEach(a => {
+    const div = document.createElement('div');
+    div.className = 'allergen-item';
+    div.dataset.id = a.id;
+    div.innerHTML = `
+      <span class="a-icon">${a.icon}</span>
+      <span>${a.label}</span>
+      <span class="a-check">✓</span>
+    `;
+    div.addEventListener('click', () => toggleAllergen(a.id, div));
+    grid.appendChild(div);
+  });
+}
+
+function buildLangGrid() {
+  const grid = document.getElementById('lang-grid');
+  LANGUAGES.forEach(lang => {
+    const btn = document.createElement('button');
+    btn.className = 'lang-btn';
+    btn.dataset.code = lang.code;
+    btn.innerHTML = `<span>${lang.flag}</span><span>${lang.name}</span>`;
+    btn.addEventListener('click', () => toggleLang(lang.code, btn));
+    grid.appendChild(btn);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SELECTION HANDLERS
+// ─────────────────────────────────────────────────────────────
+function toggleAllergen(id, el) {
+  if (selectedAllergens.has(id)) {
+    selectedAllergens.delete(id);
+    el.classList.remove('checked');
+  } else {
+    selectedAllergens.add(id);
+    el.classList.add('checked');
+  }
+  updateAllergenCount();
+}
+
+function toggleLang(code, btn) {
+  const idx = selectedLanguages.indexOf(code);
+  if (idx !== -1) {
+    // Deselect
+    selectedLanguages.splice(idx, 1);
+    btn.classList.remove('sel');
+  } else {
+    if (selectedLanguages.length >= MAX_LANGS) {
+      // Drop oldest selection
+      const oldest = selectedLanguages.shift();
+      document.querySelector(`.lang-btn[data-code="${oldest}"]`).classList.remove('sel');
+    }
+    selectedLanguages.push(code);
+    btn.classList.add('sel');
+  }
+  updateLangCount();
+}
+
+function selectAll() {
+  ALLERGENS.forEach(a => {
+    selectedAllergens.add(a.id);
+    document.querySelector(`.allergen-item[data-id="${a.id}"]`).classList.add('checked');
+  });
+  updateAllergenCount();
+}
+
+function clearAll() {
+  selectedAllergens.clear();
+  document.querySelectorAll('.allergen-item').forEach(el => el.classList.remove('checked'));
+  updateAllergenCount();
+}
+
+function updateAllergenCount() {
+  const pill = document.getElementById('allergen-count');
+  const n = selectedAllergens.size;
+  pill.textContent = `${n} selected`;
+  pill.classList.toggle('has-items', n > 0);
+}
+
+function updateLangCount() {
+  const pill = document.getElementById('lang-count');
+  const n = selectedLanguages.length;
+  pill.textContent = `${n} / ${MAX_LANGS}`;
+  pill.classList.toggle('has-items', n > 0);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  GENERATE
+// ─────────────────────────────────────────────────────────────
+async function generateCard() {
+  if (selectedAllergens.size === 0) {
+    alert('Please select at least one allergen.');
+    return;
+  }
+  if (selectedLanguages.length === 0) {
+    alert('Please select at least one language.');
+    return;
+  }
+
+  const btnGen  = document.getElementById('btn-generate');
+  const loading = document.getElementById('loading');
+  const output  = document.getElementById('output');
+
+  btnGen.disabled = true;
+  loading.classList.remove('hidden');
+  output.classList.add('hidden');
+
+  const chosenAllergens = ALLERGENS.filter(a => selectedAllergens.has(a.id));
+  const chosenLanguages = LANGUAGES.filter(l => selectedLanguages.includes(l.code));
+
+  try {
+    const translations = await Promise.all(
+      chosenLanguages.map(lang => translateForLang(lang.code, chosenAllergens))
+    );
+
+    const cardsHtml = chosenLanguages
+      .map((lang, i) => buildCardHtml(lang, chosenAllergens, translations[i]))
+      .join('');
+
+    document.getElementById('card-preview').innerHTML = cardsHtml;
+    document.getElementById('print-area').innerHTML   = cardsHtml;
+
+    loading.classList.add('hidden');
+    output.classList.remove('hidden');
+    output.scrollIntoView({ behavior: 'smooth' });
+  } catch (err) {
+    loading.classList.add('hidden');
+    console.error(err);
+    alert('Translation failed. Please check your connection and try again.');
+  } finally {
+    btnGen.disabled = false;
+  }
+}
+
+function hideOutput() {
+  document.getElementById('output').classList.add('hidden');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  TRANSLATION
+// ─────────────────────────────────────────────────────────────
+async function translateForLang(langCode, allergens) {
+  const cacheKey = langCode + '|' + allergens.map(a => a.id).join(',');
+  if (cache[cacheKey]) return cache[cacheKey];
+
+  const phraseValues  = Object.values(EN);
+  const allergenTexts = allergens.map(a => a.label);
+
+  // Translate all phrases + allergen names in parallel
+  const results = await Promise.all(
+    [...phraseValues, ...allergenTexts].map(text => translateText(text, langCode))
+  );
+
+  const phraseKeys = Object.keys(EN);
+  const out = { phrases: {}, allergenLabels: {} };
+
+  phraseKeys.forEach((key, i) => { out.phrases[key] = results[i]; });
+  allergens.forEach((a, i) => { out.allergenLabels[a.id] = results[phraseValues.length + i]; });
+
+  cache[cacheKey] = out;
+  return out;
+}
+
+async function translateText(text, targetCode) {
+  const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetCode}`;
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) return text;
+    const json = await resp.json();
+    return json.responseStatus === 200 ? json.responseData.translatedText : text;
+  } catch {
+    return text;   // fall back to English on network error
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  CARD RENDERER
+// ─────────────────────────────────────────────────────────────
+function buildCardHtml(lang, allergens, t) {
+  const p   = t.phrases;
+  const dir = lang.rtl ? 'rtl' : 'ltr';
+
+  const pills = allergens.map(a =>
+    `<span class="ac-pill">${a.icon} ${esc(t.allergenLabels[a.id] || a.label)}</span>`
+  ).join('');
+
+  return `
+<div class="allergy-card">
+  <div class="ac-header">
+    <span class="flag">${lang.flag}</span>
+    <div>
+      <div class="ac-title-lang">${lang.name}</div>
+      <div class="ac-title-trans" dir="${dir}">⚠️ ${esc(p.title)}</div>
+      <div class="ac-title-en">⚠️ ${esc(EN.title)}</div>
+    </div>
+  </div>
+  <div class="ac-body">
+
+    <div class="ac-phrase">
+      <div class="ac-phrase-trans" dir="${dir}">${esc(p.statement)}</div>
+      <div class="ac-phrase-en">${esc(EN.statement)}</div>
+    </div>
+
+    <div class="ac-phrase">
+      <div class="ac-phrase-trans" dir="${dir}">${esc(p.allergenIntro)}</div>
+      <div class="ac-phrase-en">${esc(EN.allergenIntro)}</div>
+    </div>
+    <div class="ac-allergen-list" dir="${dir}">${pills}</div>
+
+    <div class="ac-question" dir="${dir}">
+      <div class="ac-question-trans">${esc(p.question)}</div>
+      <div class="ac-question-en">${esc(EN.question)}</div>
+    </div>
+
+    <div class="ac-phrase">
+      <div class="ac-phrase-trans" dir="${dir}">${esc(p.request)}</div>
+      <div class="ac-phrase-en">${esc(EN.request)}</div>
+    </div>
+
+    <div class="ac-footer">
+      <span class="ac-footer-trans" dir="${dir}">${esc(p.thanks)}</span>
+      <span>${esc(EN.thanks)}</span>
+    </div>
+
+  </div>
+</div>`;
+}
+
+function esc(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+</script>
+</body>
+</html>

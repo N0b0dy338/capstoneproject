@@ -34,9 +34,26 @@
       color: #fff;
       padding: 1.5rem 1rem 1.4rem;
       text-align: center;
+      position: relative;
     }
     header h1 { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.4px; }
     header p  { opacity: .75; font-size: .88rem; margin-top: .25rem; }
+
+    .back-link {
+      position: absolute;
+      top: 50%;
+      left: 1rem;
+      transform: translateY(-50%);
+      color: rgba(255,255,255,.8);
+      text-decoration: none;
+      font-size: .82rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: .25rem;
+      transition: color .12s;
+    }
+    .back-link:hover { color: #fff; }
 
     /* ── LAYOUT ───────────────────────────────────────────── */
     .container { max-width: 680px; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
@@ -331,12 +348,14 @@
     @media (max-width: 460px) {
       .allergen-grid { grid-template-columns: repeat(2, 1fr); }
       .lang-grid     { grid-template-columns: repeat(2, 1fr); }
+      .back-link span { display: none; }
     }
   </style>
 </head>
 <body>
 
 <header>
+  <a class="back-link" href="index.html">&#8592; <span>Home</span></a>
   <h1>🍽️ Food Label Translator</h1>
   <p class="sub">Scan any food label — get allergy info in your language</p>
 </header>
@@ -504,7 +523,7 @@ const ALLERGENS = [
   { id:'lupin',       label:'Almatruz',            icon:'🌸',
     kw:['',''] },
   { id:'sulphites',   label:'',        icon:'⚗️',
-    kw:[] }, 
+    kw:[] },
 ]*/
 //add an accent mark to translations where needed
 const LANGUAGES = [
@@ -523,7 +542,7 @@ const LANGUAGES = [
   { code:'hi',    name:'Hindi',       flag:'🇮🇳' },
   { code:'tr',    name:'Turkish',     flag:'🇹🇷' },
   { code:'sv',    name:'Swedish',     flag:'🇸🇪' },
-  */ 
+  */
 ];
 
 const RTL = new Set(['ar','he','fa','ur']);
@@ -734,6 +753,11 @@ function attachSelectionEvents(canvas) {
   // Remove any prior listeners by cloning
   const fresh = canvas.cloneNode(true);
   canvas.parentNode.replaceChild(fresh, canvas);
+
+  // cloneNode doesn't preserve context state; re-apply DPR scale and redraw
+  const dpr = window.devicePixelRatio || 1;
+  fresh.getContext('2d').scale(dpr, dpr);
+  redrawCanvas();
 
   // Mouse
   fresh.addEventListener('mousedown', e => {

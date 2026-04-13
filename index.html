@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AllergyAware</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 14px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f2460 0%, #2563eb 100%);
+      color: #fff;
+      padding: 2.5rem 1rem 2.4rem;
+      text-align: center;
+    }
+    header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.5px; }
+    header p  { opacity: .75; font-size: .95rem; margin-top: .4rem; }
+
+    .container {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 4rem;
+    }
+
+    .section-title {
+      font-size: .75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .tool-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      border: 2px solid var(--border);
+      padding: 1.75rem 1.5rem;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: .75rem;
+      transition: border-color .15s, box-shadow .15s, transform .1s;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      cursor: pointer;
+    }
+    .tool-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 16px rgba(37,99,235,.15);
+      transform: translateY(-2px);
+    }
+    .tool-card.disabled {
+      cursor: default;
+      opacity: .72;
+    }
+    .tool-card.disabled:hover {
+      border-color: var(--border);
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+      transform: none;
+    }
+
+    .tool-icon {
+      font-size: 2.25rem;
+      line-height: 1;
+    }
+
+    .tool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+    }
+
+    .tool-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .tool-desc {
+      font-size: .875rem;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .badge-soon {
+      font-size: .68rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      background: #f1f5f9;
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      padding: .2rem .6rem;
+      white-space: nowrap;
+    }
+
+    .tool-arrow {
+      margin-top: auto;
+      font-size: .85rem;
+      font-weight: 600;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      gap: .3rem;
+    }
+    .tool-card.disabled .tool-arrow { color: var(--muted); }
+
+    @media (max-width: 480px) {
+      header h1 { font-size: 1.6rem; }
+      .tool-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AllergyAware</h1>
+  <p>Tools for navigating food allergies</p>
+</header>
+
+<div class="container">
+  <p class="section-title">Select a tool</p>
+
+  <div class="tool-grid">
+
+    <a class="tool-card" href="translator.html">
+      <div class="tool-icon">🍽️</div>
+      <div class="tool-header">
+        <span class="tool-name">Food Label Translator</span>
+      </div>
+      <p class="tool-desc">
+        Scan or photograph any food label, extract the ingredients with OCR,
+        and get an instant allergen report translated into your language.
+      </p>
+      <span class="tool-arrow">Open &rarr;</span>
+    </a>
+
+    <a class="tool-card" href="allergy-card.html">
+      <div class="tool-icon">🪪</div>
+      <div class="tool-header">
+        <span class="tool-name">Allergy Card Creator</span>
+      </div>
+      <p class="tool-desc">
+        Build a personalised allergy card listing your specific allergens,
+        translated and ready to show at restaurants abroad.
+      </p>
+      <span class="tool-arrow">Open &rarr;</span>
+    </a>
+
+  </div>
+</div>
+
+</body>
+</html>
