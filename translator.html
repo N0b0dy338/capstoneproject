@@ -382,7 +382,7 @@
       <div class="sel-active-label" id="sel-label">✂️ Region selected — drag to change</div>
     </div>
 
-    <p class="sel-hint" id="sel-hint">✥ Drag on the image to select the ingredients area for OCR</p>
+    <p class="sel-hint" id="sel-hint">✥ Drag on the image to select the ingredients area</p>
 
     <div class="btn-row">
       <button class="btn btn-primary" id="btn-cam" onclick="startCamera()">
@@ -409,7 +409,7 @@
   <div class="card" id="step2">
     <div class="card-header">
       <div class="step-badge">2</div>
-      <h2>Extract Text (OCR)</h2>
+      <h2>Extract Text </h2>
     </div>
 
     <div id="ocr-progress" class="hidden progress-wrap">
@@ -419,12 +419,12 @@
 
     <div id="ocr-err"></div>
 
-    <textarea id="ocr-text" placeholder="Scanned ingredients will appear here. You can edit the text to fix any OCR errors before generating the allergy card."></textarea>
-    <p class="hint">✏️ Review and correct any OCR errors before proceeding.</p>
+    <textarea id="ocr-text" placeholder="Scanned ingredients will appear here. You can edit the text to fix any errors before generating the allergy card."></textarea>
+    <p class="hint">✏️ Review and correct any errors before proceeding.</p>
 
     <div class="btn-row" style="margin-top:.9rem">
       <button class="btn btn-primary" id="btn-ocr" onclick="runOCR()">
-        🔍 Scan Label with OCR
+        🔍 Scan Label
       </button>
       <button class="btn btn-ghost" onclick="useSample()" title="Load sample ingredient text for testing">
         🧪 Use Sample
