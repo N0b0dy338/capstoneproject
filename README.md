@@ -1,4 +1,4 @@
-# AllergyAware
+# WillThisKillMe
 
 A client-side web app suite for people managing food allergies. No backend, no installation — open in a browser and go.
 
