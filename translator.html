@@ -547,6 +547,41 @@ const LANGUAGES = [
 
 const RTL = new Set(['ar','he','fa','ur']);
 
+const ISO3_TO_BCP47 = {
+  'eng':'en','spa':'es','fra':'fr','deu':'de','ita':'it','por':'pt',
+  'nld':'nl','pol':'pl','rus':'ru','ara':'ar','cmn':'zh-CN','jpn':'ja',
+  'kor':'ko','hin':'hi','tur':'tr','swe':'sv','heb':'he','tha':'th',
+  'vie':'vi','ind':'id','ukr':'uk','ces':'cs','hun':'hu','ron':'ro',
+  'cat':'ca','dan':'da','fin':'fi','nor':'no','hrv':'hr','slk':'sk',
+};
+
+const LANG_META = {
+  'en':    { name:'English',    flag:'🇺🇸' },
+  'es':    { name:'Spanish',    flag:'🇪🇸' },
+  'fr':    { name:'French',     flag:'🇫🇷' },
+  'de':    { name:'German',     flag:'🇩🇪' },
+  'it':    { name:'Italian',    flag:'🇮🇹' },
+  'pt':    { name:'Portuguese', flag:'🇵🇹' },
+  'nl':    { name:'Dutch',      flag:'🇳🇱' },
+  'pl':    { name:'Polish',     flag:'🇵🇱' },
+  'ru':    { name:'Russian',    flag:'🇷🇺' },
+  'ar':    { name:'Arabic',     flag:'🇸🇦' },
+  'zh-CN': { name:'Chinese',    flag:'🇨🇳' },
+  'ja':    { name:'Japanese',   flag:'🇯🇵' },
+  'ko':    { name:'Korean',     flag:'🇰🇷' },
+  'hi':    { name:'Hindi',      flag:'🇮🇳' },
+  'tr':    { name:'Turkish',    flag:'🇹🇷' },
+  'sv':    { name:'Swedish',    flag:'🇸🇪' },
+  'he':    { name:'Hebrew',     flag:'🇮🇱' },
+  'th':    { name:'Thai',       flag:'🇹🇭' },
+  'vi':    { name:'Vietnamese', flag:'🇻🇳' },
+  'id':    { name:'Indonesian', flag:'🇮🇩' },
+  'uk':    { name:'Ukrainian',  flag:'🇺🇦' },
+  'da':    { name:'Danish',     flag:'🇩🇰' },
+  'fi':    { name:'Finnish',    flag:'🇫🇮' },
+  'no':    { name:'Norwegian',  flag:'🇳🇴' },
+};
+
 const SAMPLE_TEXT = `INGREDIENTS: Wheat Flour, Sugar, Palm Oil, Cocoa Powder (3%), Skimmed Milk Powder, Whey Powder (from Milk), Hazelnuts (2%), Eggs, Raising Agents (Sodium Bicarbonate, Ammonium Bicarbonate), Salt, Soya Lecithin, Natural Vanilla Flavouring. Contains: Wheat, Milk, Eggs, Hazelnuts, Soya.`;
 
 // ─────────────────────────────────────────────────────────────
@@ -931,13 +966,37 @@ function detectAllergens(text) {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  LANGUAGE DETECTION  (franc-min via CDN, loaded on demand)
+// ─────────────────────────────────────────────────────────────
+let _franc = null;
+async function loadFranc() {
+  if (_franc) return _franc;
+  const mod = await import('https://esm.sh/franc-min@6');
+  _franc = mod.franc;
+  return _franc;
+}
+
+async function detectLanguage(text) {
+  try {
+    const sample = text.slice(0, 500);
+    const franc  = await loadFranc();
+    const iso3   = franc(sample, { minLength: 3 });
+    return ISO3_TO_BCP47[iso3] || 'en';
+  } catch (e) {
+    console.warn('Language detection failed, defaulting to en:', e);
+    return 'en';
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 //  TRANSLATION  (MyMemory — free, no key required)
 // ─────────────────────────────────────────────────────────────
-async function translate(text, targetCode) {
+async function translate(text, srcCode, targetCode) {
+  if (srcCode === targetCode) return text;
   const chunks = chunkText(text, 450);
   const parts  = [];
   for (const chunk of chunks) {
-    const url  = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=en|${targetCode}`;
+    const url  = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${srcCode}|${targetCode}`;
     const resp = await fetch(url);
     if (!resp.ok) { parts.push(chunk); continue; }
     const json = await resp.json();
@@ -988,11 +1047,13 @@ async function showAllergies(langCode) {
 
   let transIngredients = rawText;
   const transLabels = {};
+  let detectedSrc = 'en';
 
   try {
+    detectedSrc = await detectLanguage(rawText);
     const results = await Promise.all([
-      translate(rawText, langCode),
-      ...allergens.map(a => translate(a.label, langCode))
+      translate(rawText, detectedSrc, langCode),
+      ...allergens.map(a => translate(a.label, 'en', langCode))
     ]);
     transIngredients = results[0];
     allergens.forEach((a, i) => { transLabels[a.id] = results[i + 1]; });
@@ -1001,6 +1062,12 @@ async function showAllergies(langCode) {
   }
 
   loadingEl.classList.add('hidden');
+
+  const srcMeta = LANG_META[detectedSrc] || { name: detectedSrc, flag: '🌐' };
+  const sameLanguage = detectedSrc === langCode;
+  const detectedBadge = sameLanguage
+    ? `<div class="alert alert-info">🔍 Detected: ${srcMeta.flag} ${srcMeta.name} — already in target language</div>`
+    : `<div class="alert alert-info">🔍 Detected source: ${srcMeta.flag} ${srcMeta.name}</div>`;
 
   const summaryHtml = present.length > 0
     ? `<div class="summary-bar">⚠️ ${present.length} allergen${present.length > 1 ? 's' : ''} detected out of ${allergens.length} checked</div>`
@@ -1015,6 +1082,7 @@ async function showAllergies(langCode) {
   ).join('');
 
   cardContent.innerHTML = `
+    ${detectedBadge}
     ${summaryHtml}
     <div class="section-label">Allergens (${langInfo.flag} ${langInfo.name}) — ${present.length} / ${allergens.length}</div>
     <div class="allergen-grid">${presentBadges}${absentBadges}</div>
