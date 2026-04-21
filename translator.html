@@ -547,14 +547,6 @@ const LANGUAGES = [
 
 const RTL = new Set(['ar','he','fa','ur']);
 
-const ISO3_TO_BCP47 = {
-  'eng':'en','spa':'es','fra':'fr','deu':'de','ita':'it','por':'pt',
-  'nld':'nl','pol':'pl','rus':'ru','ara':'ar','cmn':'zh-CN','jpn':'ja',
-  'kor':'ko','hin':'hi','tur':'tr','swe':'sv','heb':'he','tha':'th',
-  'vie':'vi','ind':'id','ukr':'uk','ces':'cs','hun':'hu','ron':'ro',
-  'cat':'ca','dan':'da','fin':'fi','nor':'no','hrv':'hr','slk':'sk',
-};
-
 const LANG_META = {
   'en':    { name:'English',    flag:'🇺🇸' },
   'es':    { name:'Spanish',    flag:'🇪🇸' },
@@ -966,31 +958,73 @@ function detectAllergens(text) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  LANGUAGE DETECTION  (franc-min via CDN, loaded on demand)
+//  LANGUAGE DETECTION  (script analysis + word frequency)
 // ─────────────────────────────────────────────────────────────
-let _franc = null;
-async function loadFranc() {
-  if (_franc) return _franc;
-  const mod = await import('https://esm.sh/franc-min@6');
-  _franc = mod.franc;
-  return _franc;
-}
+function detectLanguage(text) {
+  if (!text || text.trim().length < 5) return 'en';
 
-async function detectLanguage(text) {
-  try {
-    const sample = text.slice(0, 500);
-    const franc  = await loadFranc();
-    const iso3   = franc(sample, { minLength: 3 });
-    return ISO3_TO_BCP47[iso3] || 'en';
-  } catch (e) {
-    console.warn('Language detection failed, defaulting to en:', e);
-    return 'en';
+  // Non-Latin scripts detected by character range ratio
+  const nonWs = text.replace(/\s/g, '').length || 1;
+  const ratio  = re => ((text.match(re) || []).length / nonWs);
+
+  if (ratio(/[\u0600-\u06FF]/g) > 0.10) return 'ar';
+  if (ratio(/[\u0400-\u04FF]/g) > 0.10) return 'ru';
+  if (ratio(/[\uAC00-\uD7AF]/g) > 0.10) return 'ko';
+  if (ratio(/[\u3040-\u309F\u30A0-\u30FF]/g) > 0.05) return 'ja';
+  if (ratio(/[\u4E00-\u9FFF\u3400-\u4DBF]/g) > 0.10) return 'zh-CN';
+  if (ratio(/[\u0370-\u03FF]/g) > 0.10) return 'el';
+  if (ratio(/[\u0900-\u097F]/g) > 0.10) return 'hi';
+  if (ratio(/[\u0E00-\u0E7F]/g) > 0.10) return 'th';
+
+  // Latin-script: score common function words + food vocabulary per language
+  const wordSet = new Set(
+    (text.toLowerCase().match(/\b[a-záàâäéèêëíìîïóòôöúùûüýñçæøåœ]+\b/g) || [])
+  );
+  if (wordSet.size < 3) return 'en';
+
+  const MARKERS = {
+    es: ['de','la','el','los','las','del','con','para','por','sin','leche','harina','azúcar','aceite','sal','trigo','azucar'],
+    fr: ['de','la','le','les','du','des','et','avec','pour','lait','farine','sucre','huile','sel','blé'],
+    de: ['der','die','das','und','mit','von','aus','für','milch','mehl','zucker','öl','wasser','salz'],
+    it: ['di','la','il','gli','del','della','con','per','latte','farina','zucchero','olio','acqua','sale'],
+    pt: ['de','da','do','dos','com','para','por','uma','leite','farinha','açúcar','óleo','água','sal'],
+    nl: ['de','het','een','van','met','voor','door','melk','meel','suiker','olie','water','zout'],
+    pl: ['się','nie','jak','ale','mleko','mąka','cukier','olej','woda','sól'],
+    sv: ['och','att','det','som','för','med','mjölk','mjöl','socker','olja','vatten','salt'],
+  };
+
+  let bestLang = 'en', bestScore = 0;
+  for (const [lang, markers] of Object.entries(MARKERS)) {
+    const score = markers.filter(m => wordSet.has(m)).length;
+    if (score > bestScore) { bestScore = score; bestLang = lang; }
   }
+
+  // Need at least 2 marker hits to override the English default
+  return bestScore >= 2 ? bestLang : 'en';
 }
 
 // ─────────────────────────────────────────────────────────────
 //  TRANSLATION  (MyMemory — free, no key required)
 // ─────────────────────────────────────────────────────────────
+const SCRIPT_RE = {
+  hi: /[\u0900-\u097F]/, ar: /[\u0600-\u06FF]/, ru: /[\u0400-\u04FF]/,
+  uk: /[\u0400-\u04FF]/, ja: /[\u3040-\u30FF\u4E00-\u9FFF]/, ko: /[\uAC00-\uD7AF]/,
+  'zh-CN': /[\u4E00-\u9FFF]/, el: /[\u0370-\u03FF]/, th: /[\u0E00-\u0E7F]/,
+  he: /[\u05D0-\u05EA]/,
+};
+
+function pickTranslation(json, targetCode, fallback) {
+  const re     = SCRIPT_RE[targetCode];
+  const isGood = t => t && (!re || re.test(t));
+  const status = json.responseStatus;
+  const primary = json.responseData?.translatedText;
+  if (isGood(primary) && (status === 200 || status === 206)) return primary;
+  for (const m of (json.matches || [])) {
+    if (isGood(m.translation)) return m.translation;
+  }
+  return primary || fallback;
+}
+
 async function translate(text, srcCode, targetCode) {
   if (srcCode === targetCode) return text;
   const chunks = chunkText(text, 450);
@@ -999,8 +1033,7 @@ async function translate(text, srcCode, targetCode) {
     const url  = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${srcCode}|${targetCode}`;
     const resp = await fetch(url);
     if (!resp.ok) { parts.push(chunk); continue; }
-    const json = await resp.json();
-    parts.push(json.responseStatus === 200 ? json.responseData.translatedText : chunk);
+    parts.push(pickTranslation(await resp.json(), targetCode, chunk));
   }
   return parts.join(' ');
 }
@@ -1050,10 +1083,10 @@ async function showAllergies(langCode) {
   let detectedSrc = 'en';
 
   try {
-    detectedSrc = await detectLanguage(rawText);
+    detectedSrc = detectLanguage(rawText);
     const results = await Promise.all([
       translate(rawText, detectedSrc, langCode),
-      ...allergens.map(a => translate(a.label, 'en', langCode))
+      ...allergens.map(a => translate(a.label.toLowerCase(), 'en', langCode))
     ]);
     transIngredients = results[0];
     allergens.forEach((a, i) => { transLabels[a.id] = results[i + 1]; });

@@ -610,7 +610,7 @@ async function translateForLang(langCode, allergens) {
   if (cache[cacheKey]) return cache[cacheKey];
 
   const phraseValues  = Object.values(EN);
-  const allergenTexts = allergens.map(a => a.label);
+  const allergenTexts = allergens.map(a => a.label.toLowerCase());
 
   // Translate all phrases + allergen names in parallel
   const results = await Promise.all(
@@ -627,15 +627,33 @@ async function translateForLang(langCode, allergens) {
   return out;
 }
 
+const SCRIPT_RE = {
+  hi: /[\u0900-\u097F]/, ar: /[\u0600-\u06FF]/, ru: /[\u0400-\u04FF]/,
+  uk: /[\u0400-\u04FF]/, ja: /[\u3040-\u30FF\u4E00-\u9FFF]/, ko: /[\uAC00-\uD7AF]/,
+  'zh-CN': /[\u4E00-\u9FFF]/, el: /[\u0370-\u03FF]/, th: /[\u0E00-\u0E7F]/,
+  he: /[\u05D0-\u05EA]/,
+};
+
+function pickTranslation(json, targetCode, fallback) {
+  const re     = SCRIPT_RE[targetCode];
+  const isGood = t => t && (!re || re.test(t));
+  const status = json.responseStatus;
+  const primary = json.responseData?.translatedText;
+  if (isGood(primary) && (status === 200 || status === 206)) return primary;
+  for (const m of (json.matches || [])) {
+    if (isGood(m.translation)) return m.translation;
+  }
+  return primary || fallback;
+}
+
 async function translateText(text, targetCode) {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetCode}`;
   try {
     const resp = await fetch(url);
     if (!resp.ok) return text;
-    const json = await resp.json();
-    return json.responseStatus === 200 ? json.responseData.translatedText : text;
+    return pickTranslation(await resp.json(), targetCode, text);
   } catch {
-    return text;   // fall back to English on network error
+    return text;
   }
 }
 
