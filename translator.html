@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Food Label Translator</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css">
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -473,15 +474,15 @@ const ALLERGENS = [
   { id:'peanuts',     label:'Peanuts',          icon:'🥜',
     kw:['peanut','groundnut','monkey nut','arachis'] },
   { id:'nuts',        label:'Tree Nuts',        icon:'🌰',
-    kw:['almond','hazelnut','walnut','cashew','pecan','brazil nut','pistachio','macadamia','queensland nut','marzipan','praline'] },
+    kw:['almond','hazelnut','walnut','cashew','pecan','brazil nut','pistachio','macadamia','queensland nut','marzipan','praline','tree nut'] },
   { id:'soy',         label:'Soy / Soya',       icon:'🫘',
     kw:['soy ','soya','tofu','tempeh','miso','edamame','soybean','soy sauce','tamari'] },
   { id:'fish',        label:'Fish',             icon:'🐟',
     kw:['fish','cod','salmon','tuna','mackerel','anchov','sardine','herring','tilapia','bass','flounder','pike','pollock','perch','worcestershire'] },
   { id:'crustaceans', label:'Crustaceans',      icon:'🦐',
-    kw:['crab','lobster','shrimp','prawn','crayfish','crawfish','barnacle','krill'] },
+    kw:['crab','lobster','shrimp','prawn','crayfish','crawfish','barnacle','krill','crustacean'] },
   { id:'molluscs',    label:'Molluscs',         icon:'🦑',
-    kw:['squid','octopus','clam','mussel','oyster','scallop','snail','abalone','cockle','whelk'] },
+    kw:['squid','octopus','clam','mussel','oyster','scallop','snail','abalone','cockle','whelk','mollusc','mollusk'] },
   { id:'celery',      label:'Celery',           icon:'🥬',
     kw:['celery','celeriac'] },
   { id:'mustard',     label:'Mustard',          icon:'🌿',
@@ -542,10 +543,21 @@ const LANGUAGES = [
   { code:'hi',    name:'Hindi',       flag:'🇮🇳' },
   { code:'tr',    name:'Turkish',     flag:'🇹🇷' },
   { code:'sv',    name:'Swedish',     flag:'🇸🇪' },
-  { code:'en',    name:'English',     flag:'🇺🇸' },
+  { code:'en',    name:'English',     flag:'🇺  ' },
 ];
 
 const RTL = new Set(['ar','he','fa','ur']);
+
+const LANG_FLAG_CC = {
+  es:'es', fr:'fr', de:'de', it:'it', pt:'pt', nl:'nl', pl:'pl',
+  ru:'ru', ar:'sa', 'zh-CN':'cn', ja:'jp', ko:'kr', hi:'in', tr:'tr',
+  sv:'se', en:'us', he:'il', th:'th', vi:'vn', id:'id', uk:'ua',
+  da:'dk', fi:'fi', no:'no', el:'gr',
+};
+function flagHtml(code) {
+  const cc = LANG_FLAG_CC[code];
+  return cc ? `<span class="fi fi-${cc}"></span>` : '🌐';
+}
 
 const LANG_META = {
   'en':    { name:'English',    flag:'🇺🇸' },
@@ -601,7 +613,7 @@ function buildLangGrid() {
     const btn = document.createElement('button');
     btn.className = 'lang-btn';
     btn.dataset.code = lang.code;
-    btn.innerHTML = `<span>${lang.flag}</span><span>${lang.name}</span>`;
+    btn.innerHTML = `<span>${flagHtml(lang.code)}</span><span>${lang.name}</span>`;
     btn.addEventListener('click', () => {
       document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('sel'));
       btn.classList.add('sel');
@@ -616,6 +628,13 @@ function buildLangGrid() {
 // ─────────────────────────────────────────────────────────────
 async function startCamera() {
   clearAlert('cam-err');
+
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showAlert('cam-err', 'info',
+      'Camera API unavailable. Open this page via a local server (or HTTPS) to enable it, or use "Upload Image".');
+    return;
+  }
+
   try {
     mediaStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: { ideal:'environment' }, width: { ideal:1280 }, height: { ideal:960 } }
@@ -627,7 +646,15 @@ async function startCamera() {
     setVisible('btn-cam', false);
     setVisible('btn-capture', true);
   } catch (e) {
-    showAlert('cam-err', 'err', 'Camera access denied or unavailable. Please use "Upload Image" instead.');
+    const msgs = {
+      NotAllowedError:      'Camera permission denied. Check browser permissions and Windows Settings → Privacy → Camera, or use "Upload Image".',
+      PermissionDeniedError:'Camera permission denied. Check browser permissions and Windows Settings → Privacy → Camera, or use "Upload Image".',
+      NotFoundError:        'No camera found on this device. Please use "Upload Image" instead.',
+      DevicesNotFoundError: 'No camera found on this device. Please use "Upload Image" instead.',
+      NotReadableError:     'Camera is already in use by another app. Close it and try again, or use "Upload Image".',
+      TrackStartError:      'Camera is already in use by another app. Close it and try again, or use "Upload Image".',
+    };
+    showAlert('cam-err', 'err', msgs[e.name] || 'Camera unavailable. Please use "Upload Image" instead.');
   }
 }
 
@@ -1072,35 +1099,47 @@ async function showAllergies(langCode) {
   loadingEl.classList.remove('hidden');
   outputCard.scrollIntoView({ behavior: 'smooth' });
 
-  const allergens = detectAllergens(rawText);
-  const present   = allergens.filter(a => a.present);
-  const absent    = allergens.filter(a => !a.present);
-  const langInfo  = LANGUAGES.find(l => l.code === langCode);
-  const dir       = RTL.has(langCode) ? 'rtl' : 'ltr';
+  const langInfo     = LANGUAGES.find(l => l.code === langCode);
+  const dir          = RTL.has(langCode) ? 'rtl' : 'ltr';
+  const detectedSrc  = detectLanguage(rawText);
 
   let transIngredients = rawText;
-  const transLabels = {};
-  let detectedSrc = 'en';
+  const transLabels    = {};
+  let allergens        = [];
+  let present          = [];
+  let absent           = [];
 
   try {
-    detectedSrc = detectLanguage(rawText);
+    // Allergen keywords are English-only, so translate to English first if needed
+    const englishText = detectedSrc === 'en'
+      ? rawText
+      : await translate(rawText, detectedSrc, 'en');
+
+    allergens = detectAllergens(englishText);
+    present   = allergens.filter(a => a.present);
+    absent    = allergens.filter(a => !a.present);
+
+    // Translate for display (reuse the English text we already have if target is English)
     const results = await Promise.all([
-      translate(rawText, detectedSrc, langCode),
+      langCode === 'en' ? Promise.resolve(englishText) : translate(rawText, detectedSrc, langCode),
       ...allergens.map(a => translate(a.label.toLowerCase(), 'en', langCode))
     ]);
     transIngredients = results[0];
     allergens.forEach((a, i) => { transLabels[a.id] = results[i + 1]; });
   } catch (err) {
     console.warn('Translation failed:', err);
+    allergens = detectAllergens(rawText);
+    present   = allergens.filter(a => a.present);
+    absent    = allergens.filter(a => !a.present);
   }
 
   loadingEl.classList.add('hidden');
 
-  const srcMeta = LANG_META[detectedSrc] || { name: detectedSrc, flag: '🌐' };
+  const srcMeta = LANG_META[detectedSrc] || { name: detectedSrc };
   const sameLanguage = detectedSrc === langCode;
   const detectedBadge = sameLanguage
-    ? `<div class="alert alert-info">🔍 Detected: ${srcMeta.flag} ${srcMeta.name} — already in target language</div>`
-    : `<div class="alert alert-info">🔍 Detected source: ${srcMeta.flag} ${srcMeta.name}</div>`;
+    ? `<div class="alert alert-info">🔍 Detected: ${flagHtml(detectedSrc)} ${srcMeta.name} — already in target language</div>`
+    : `<div class="alert alert-info">🔍 Detected source: ${flagHtml(detectedSrc)} ${srcMeta.name}</div>`;
 
   const summaryHtml = present.length > 0
     ? `<div class="summary-bar">⚠️ ${present.length} allergen${present.length > 1 ? 's' : ''} detected out of ${allergens.length} checked</div>`
@@ -1117,9 +1156,9 @@ async function showAllergies(langCode) {
   cardContent.innerHTML = `
     ${detectedBadge}
     ${summaryHtml}
-    <div class="section-label">Allergens (${langInfo.flag} ${langInfo.name}) — ${present.length} / ${allergens.length}</div>
+    <div class="section-label">Allergens (${flagHtml(langCode)} ${langInfo.name}) — ${present.length} / ${allergens.length}</div>
     <div class="allergen-grid">${presentBadges}${absentBadges}</div>
-    <div class="section-label">Ingredients (${langInfo.flag} ${langInfo.name})</div>
+    <div class="section-label">Ingredients (${flagHtml(langCode)} ${langInfo.name})</div>
     <div class="ingredients-box" dir="${dir}">${escHtml(transIngredients)}</div>
   `;
 }
