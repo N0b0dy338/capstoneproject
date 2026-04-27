@@ -444,7 +444,7 @@ const LANGUAGES = [
 const EN = {
   title:        'FOOD ALLERGY ALERT',
   statement:    'I have a serious, life-threatening food allergy.',
-  allergenIntro:'I am allergic to:',
+  allergenIntro:'I am allergic to the following foods and ingredients:',
   question:     'Does this food contain any of these ingredients, or has it been prepared near them? Is it safe for me to eat?',
   request:      'Please do not serve me food containing these ingredients.',
   thanks:       'Thank you for your help.',
@@ -622,7 +622,8 @@ async function translateForLang(langCode, allergens) {
   if (cache[cacheKey]) return cache[cacheKey];
 
   const phraseValues  = Object.values(EN);
-  const allergenTexts = allergens.map(a => a.label.toLowerCase());
+  // Append "(food)" so the API matches a food context rather than a homonym or joke entry
+  const allergenTexts = allergens.map(a => `${a.label} (food)`);
 
   // Translate all phrases + allergen names in parallel
   const results = await Promise.all(
@@ -633,7 +634,11 @@ async function translateForLang(langCode, allergens) {
   const out = { phrases: {}, allergenLabels: {} };
 
   phraseKeys.forEach((key, i) => { out.phrases[key] = results[i]; });
-  allergens.forEach((a, i) => { out.allergenLabels[a.id] = results[phraseValues.length + i]; });
+  allergens.forEach((a, i) => {
+    // Strip the translated "(food)" context suffix if the API preserved the parenthetical
+    const raw = results[phraseValues.length + i];
+    out.allergenLabels[a.id] = raw.replace(/\s*\([^)]*\)\s*$/, '').trim() || a.label;
+  });
 
   cache[cacheKey] = out;
   return out;
